@@ -1,6 +1,7 @@
-# Walrus HTTP API Example
+# Walrus SDK Example
 
-This codebase showcases how you can utilize the [Walrus HTTP API](https://docs.wal.app/usage/web-api.html).
+This codebase showcases how you can utilize the [Walrus SDK](https://docs.wal.app/usage/sdks.html).
+More examples here: https://github.com/MystenLabs/ts-sdks/tree/main/packages/walrus/examples
 
 ## Local setup
 
@@ -45,4 +46,16 @@ OR
 
 ```bash
 pnpm download <BLOB_ID> <OUTPUT_PATH>
+```
+
+5. See file details
+
+```bash
+pnpm details <BLOB_ID>
+```
+
+6. Delete a file
+
+```bash
+pnpm delete <BLOB_ID>
 ```

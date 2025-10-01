@@ -1,5 +1,7 @@
 # Walrus Interaction Examples
 
+### [About Walrus](https://docs.wal.app/index.html)
+
 This repo holds 5 different ways of interacting with Walrus:
 
 1. [http-api](http-api)

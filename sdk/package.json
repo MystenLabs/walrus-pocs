@@ -1,0 +1,29 @@
+{
+  "name": "sdk",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "write": "ts-node ./src/write.ts",
+    "read": "ts-node src/read.ts",
+    "upload": "ts-node ./src/upload.ts",
+    "download": "ts-node ./src/download.ts",
+    "delete": "ts-node ./src/delete.ts",
+    "details": "ts-node ./src/attributes.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.11.1",
+  "devDependencies": {
+    "@types/node": "^24.6.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@mysten/sui": "^1.38.0",
+    "@mysten/walrus": "^0.7.0",
+    "dotenv": "^17.2.3",
+    "undici": "^7.16.0"
+  }
+}
