@@ -4,8 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "write": "ts-node ./src/write.ts",
+    "read": "ts-node src/read.ts",
     "upload": "ts-node ./src/upload.ts",
-    "read": "ts-node src/read.ts"
+    "download": "ts-node ./src/download.ts"
   },
   "keywords": [],
   "author": "",

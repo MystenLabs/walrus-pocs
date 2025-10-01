@@ -15,13 +15,13 @@ pnpm i
 
 ## Test the commands
 
-1. Upload a file
+1. Write simple text
 
 ```bash
-pnpm upload ../data/walrus.jpeg
+pnpm write "This is some text"
 ```
 
-2. View a Walrus file
+2. Read simple text
 
 Visit: https://aggregator.walrus-testnet.walrus.space/v1/blobs/<BLOB_ID>
 
@@ -29,4 +29,16 @@ OR
 
 ```bash
 pnpm read <BLOB_ID>
+```
+
+3. Upload a file
+
+```bash
+pnpm upload <FILE_PATH>
+```
+
+4. Download a file
+
+```bash
+pnpm download <BLOB_ID> <OUTPUT_PATH>
 ```
