@@ -92,29 +92,6 @@ export function useSealSession() {
     }, [currentAccount, suiClient, signPersonalMessage]);
 
     /**
-     * Get a personal message for signing without creating a full session
-     * 
-     * Useful for previewing what the user will sign before initializing the session.
-     * Requires a connected Sui wallet.
-     * 
-     * @returns Personal message bytes that would be signed
-     * @throws Error if no wallet is connected
-     */
-    const getPersonalMessage = useCallback(async (): Promise<Uint8Array> => {
-        if (!currentAccount?.address) {
-            throw new Error("No Sui wallet connected. Please connect your wallet first.");
-        }
-
-        const tempSessionKey = await SessionKey.create({
-            address: currentAccount.address,
-            packageId: SEAL_CONFIG.packageId,
-            ttlMin: SESSION_TTL_MINUTES,
-            suiClient,
-        });
-        return tempSessionKey.getPersonalMessage();
-    }, [currentAccount, suiClient]);
-
-    /**
      * Clear the current session state
      */
     const clearSession = useCallback(() => {
@@ -132,7 +109,6 @@ export function useSealSession() {
         session,
         suiClient,
         initializeSession,
-        getPersonalMessage,
         clearSession,
         isSessionValid,
     };
