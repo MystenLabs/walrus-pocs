@@ -11,7 +11,7 @@ A Next.js application demonstrating end-to-end encryption using **Mysten's Seal*
 
 ## 🏗️ Architecture
 
-1. **Frontend**: User encrypts data with Seal client-side
+1. **Frontend**: User encrypts & decrypts data with Seal client-side
 2. **Backend API**: Uploads encrypted blob to Walrus, creates `PrivateData` object on Sui
 3. **Walrus**: Stores encrypted blobs with high availability
 4. **Seal Key Servers**: Provide threshold decryption keys after verifying on-chain ownership
@@ -105,15 +105,17 @@ app/
 └── src/
     ├── app/
     │   ├── api/              # Backend API routes
-    │   │   └── store-encrypted-blob/  # Stores blob & creates on-chain object
+    │   │   ├── store-encrypted-blob/  # Stores blob & creates on-chain object
+    │   │   └── test-nacl-session/     # Test nacl-based signing (non-Sui wallets)
     │   ├── page.tsx          # Main UI
+    │   ├── test-nacl-seal-session/    # Test page for nacl signing demo
     │   └── providers.tsx     # Sui wallet providers
     ├── hooks/
     │   ├── useSealSession.ts # Session key management
     │   ├── useSealEncrypt.ts # Encryption logic
     │   └── useSealDecrypt.ts # Decryption logic
     └── utils/
-        └── sealUtils.ts      # Shared utilities (key ID computation, config)
+        └── sealUtils.ts      # Reusable Seal utilities & documentation
 move/
 └── seal_data/
     └── sources/
@@ -122,10 +124,20 @@ move/
 
 ## 🔐 Security Notes
 
-- **Threshold Encryption**: Data encrypted with t-of-n threshold scheme
+- **Threshold Encryption**: Data encrypted with t-of-n threshold scheme (default: 1 of 2 key servers)
 - **No Single Point of Failure**: Decryption requires multiple key servers
 - **On-Chain Verification**: Key servers verify ownership via Sui blockchain
 - **Client-Side Encryption**: Data encrypted before leaving the browser
+
+## 🔌 Non-Sui Wallet Integration
+
+This project includes a working example of integrating Seal with **non-Sui wallets** (e.g., Phantom, MetaMask):
+
+- **Reference Implementation**: See `app/src/app/api/test-nacl-session/route.ts`
+- **Test Page**: Visit `/test-nacl-seal-session` to run the demo
+- **Documentation**: Check `app/src/utils/sealUtils.ts` for signature format requirements
+
+The test demonstrates how to manually construct Sui-compatible signatures using nacl when integrating wallets that don't natively support Sui's signing format.
 
 ## 🧪 Testing
 
