@@ -1,11 +1,16 @@
 "use client";
 
 import { useMemo } from "react";
-import { SessionKey, SealClient } from "@mysten/seal";
+import { SessionKey } from "@mysten/seal";
 import { Transaction } from "@mysten/sui/transactions";
 import { fromHex } from "@mysten/sui/utils";
 import { SuiClient, getFullnodeUrl, SuiObjectResponse } from "@mysten/sui/client";
-import { SEAL_CONFIG, computeSealKeyId } from "@/utils/sealUtils";
+import { 
+    SEAL_CONFIG, 
+    createSealClient, 
+    decryptData as decryptDataUtil, 
+    computeKeyIdFromAddressAndNonce 
+} from "@/utils/sealUtils";
 
 interface PrivateDataFields {
     creator: string;
@@ -27,12 +32,13 @@ function findPrivateDataObject(
 }
 
 /**
- * Build a transaction that calls seal_approve for access control
+ * Build and serialize a transaction that calls seal_approve for access control
  */
-function buildApprovalTransaction(
+async function buildApprovalTransaction(
     keyId: string,
-    privateDataObjectId: string
-): Transaction {
+    privateDataObjectId: string,
+    suiClient: SuiClient
+): Promise<Uint8Array> {
     const tx = new Transaction();
     tx.moveCall({
         target: `${SEAL_CONFIG.packageId}::seal_data::seal_approve`,
@@ -41,7 +47,11 @@ function buildApprovalTransaction(
             tx.object(privateDataObjectId),
         ]
     });
-    return tx;
+    
+    return await tx.build({ 
+        client: suiClient, 
+        onlyTransactionKind: true 
+    });
 }
 
 export function useSealDecrypt() {
@@ -50,14 +60,10 @@ export function useSealDecrypt() {
         []
     );
     
-    const sealClient = useMemo(() => new SealClient({
-        suiClient,
-        serverConfigs: SEAL_CONFIG.serverObjectIds.map((id) => ({ 
-            objectId: id, 
-            weight: 1 
-        })),
-        verifyKeyServers: false,
-    }), [suiClient]);
+    const sealClient = useMemo(
+        () => createSealClient(suiClient, SEAL_CONFIG.serverObjectIds),
+        [suiClient]
+    );
 
     /**
      * Decrypt data encrypted with Seal
@@ -105,20 +111,21 @@ export function useSealDecrypt() {
 
         // Compute the key ID using the CREATOR's address (not the current owner)
         // This is critical: the keyId must match what was used during encryption
-        const keyId = computeSealKeyId(creatorAddress, nonceBytes);
+        const keyId = computeKeyIdFromAddressAndNonce(creatorAddress, nonceBytes);
 
         // Build approval transaction to prove ownership
-        const approvalTx = buildApprovalTransaction(keyId, privateDataObject.data.objectId);
-        const txBytes = await approvalTx.build({ 
-            client: suiClient, 
-            onlyTransactionKind: true 
-        });
+        const txBytes = await buildApprovalTransaction(
+            keyId, 
+            privateDataObject.data.objectId,
+            suiClient
+        );
 
-        // Decrypt using Seal with approval proof
-        const decryptedBytes = await sealClient.decrypt({
-            data: encryptedBytes,
+        // Decrypt using reusable utility
+        const decryptedBytes = await decryptDataUtil({
+            encryptedData: encryptedBytes,
+            approvalTxBytes: txBytes,
             sessionKey,
-            txBytes,
+            sealClient,
         });
 
         // Convert decrypted bytes back to UTF-8 string

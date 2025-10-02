@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 import { useSealEncrypt } from "@/hooks/useSealEncrypt";
 import { useSealDecrypt } from "@/hooks/useSealDecrypt";
@@ -17,6 +17,13 @@ export default function EncryptPage() {
   const [status, setStatus] = useState<string>("");
   const [cipherPreview, setCipherPreview] = useState<string>("");
   const [sessionInitialized, setSessionInitialized] = useState(false);
+  
+  // Sync sessionInitialized state with session (auto-reset on wallet change)
+  useEffect(() => {
+    if (!session) {
+      setSessionInitialized(false);
+    }
+  }, [session]);
   
   // Decryption state
   const [blobId, setBlobId] = useState("");

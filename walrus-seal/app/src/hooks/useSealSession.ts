@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { SessionKey } from "@mysten/seal";
 import { SuiClient, getFullnodeUrl } from "@mysten/sui/client";
 import { useCurrentAccount, useSignPersonalMessage } from "@mysten/dapp-kit";
-import { SEAL_CONFIG } from "@/utils/sealUtils";
+import { SEAL_CONFIG, createAndSignSessionKey } from "@/utils/sealUtils";
 
 const SESSION_TTL_MINUTES = 30;
 
@@ -27,6 +27,24 @@ export function useSealSession() {
     );
 
     /**
+     * Auto-clear session when wallet disconnects or switches to a different address
+     */
+    useEffect(() => {
+        const currentAddress = currentAccount?.address;
+        
+        // If wallet disconnected, clear session
+        if (!currentAddress && session) {
+            setSession(null);
+            return;
+        }
+        
+        // If wallet switched to different address, clear session
+        if (session && currentAddress && session.suiAddress !== currentAddress) {
+            setSession(null);
+        }
+    }, [currentAccount?.address, session]);
+
+    /**
      * Initialize a Seal session with user signature
      * 
      * Creates a SessionKey, prompts user to sign with their Sui wallet, then activates the session.
@@ -42,31 +60,30 @@ export function useSealSession() {
 
         const suiAddress = currentAccount.address;
 
-        // Create a new SessionKey for this address
-        const sessionKey = await SessionKey.create({
-            address: suiAddress,
+        // Capture the signature for backend verification
+        let capturedSignature = "";
+
+        // Create and sign session key using reusable utility
+        const sessionKey = await createAndSignSessionKey({
+            suiAddress,
             packageId: SEAL_CONFIG.packageId,
-            ttlMin: SESSION_TTL_MINUTES,
+            ttlMinutes: SESSION_TTL_MINUTES,
             suiClient,
+            signMessage: async (message: Uint8Array) => {
+                const { signature } = await signPersonalMessage({ message });
+                capturedSignature = signature; // Store for session state
+                return signature;
+            },
         });
         
-        // Get the personal message that needs to be signed
         const personalMessageBytes = sessionKey.getPersonalMessage();
-        
-        // Prompt user to sign with their Sui wallet
-        const { signature: signatureBase64 } = await signPersonalMessage({
-            message: personalMessageBytes,
-        });
-        
-        // Activate the session by setting the signature
-        await sessionKey.setPersonalMessageSignature(signatureBase64);
         
         // Create and store session state
         const sessionState: SealSessionState = {
             suiAddress,
             sessionKey,
             personalMessageBytes,
-            signatureBase64,
+            signatureBase64: capturedSignature, // Needed for backend API verification
             isReady: true,
         };
         

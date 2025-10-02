@@ -3,8 +3,12 @@
 import { useMemo } from "react";
 import { toHex } from "@mysten/sui/utils";
 import { SuiClient, getFullnodeUrl } from "@mysten/sui/client";
-import { SealClient } from "@mysten/seal";
-import { SEAL_CONFIG, computeSealKeyId } from "@/utils/sealUtils";
+import { 
+    SEAL_CONFIG, 
+    createSealClient, 
+    encryptData, 
+    computeKeyIdFromAddressAndNonce 
+} from "@/utils/sealUtils";
 
 const NONCE_SIZE_BYTES = 16;
 
@@ -21,14 +25,10 @@ export function useSealEncrypt() {
         []
     );
     
-    const sealClient = useMemo(() => new SealClient({
-        suiClient,
-        serverConfigs: SEAL_CONFIG.serverObjectIds.map((id) => ({ 
-            objectId: id, 
-            weight: 1 
-        })),
-        verifyKeyServers: false,
-    }), [suiClient]);
+    const sealClient = useMemo(
+        () => createSealClient(suiClient, SEAL_CONFIG.serverObjectIds),
+        [suiClient]
+    );
 
     /**
      * Encrypt a UTF-8 string message using Seal
@@ -44,18 +44,20 @@ export function useSealEncrypt() {
         const nonce = crypto.getRandomValues(new Uint8Array(NONCE_SIZE_BYTES));
         
         // Compute the Seal key ID (address + nonce)
-        const keyId = computeSealKeyId(suiAddress, nonce);
+        const keyId = computeKeyIdFromAddressAndNonce(suiAddress, nonce);
         
-        // Encrypt the message using Seal's threshold encryption
-        const { encryptedObject } = await sealClient.encrypt({
+        // Encrypt using reusable utility
+        const result = await encryptData({
             data: messageBytes,
+            keyId,
             packageId: SEAL_CONFIG.packageId,
-            id: keyId,
             threshold: SEAL_CONFIG.threshold,
+            sealClient,
         });
 
         // Convert encrypted object to base64 for JSON transport
-        const encryptedBase64 = Buffer.from(encryptedObject as unknown as Uint8Array).toString("base64");
+        // Buffer.from() accepts ArrayBuffer, TypedArray, and other array-like objects
+        const encryptedBase64 = Buffer.from(result.encryptedObject as any).toString("base64");
         
         return { 
             encryptedObjectBase64: encryptedBase64,
