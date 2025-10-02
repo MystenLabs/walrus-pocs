@@ -12,13 +12,15 @@
 ///
 module seal_data::seal_data;
 
+use std::string::String;
+
 const ENoAccess: u64 = 77;
 
 public struct PrivateData has key, store {
     id: UID,
     creator: address,
     nonce: vector<u8>,
-    blob_id: u256,
+    blob_id: String,
 }
 
 /// The encryption key id is [pkg id][creator address][random nonce]
@@ -34,7 +36,7 @@ fun compute_key_id(sender: address, nonce: vector<u8>): vector<u8> {
 }
 
 /// Store an encrypted data that was encrypted using the above key id.
-public fun store(nonce: vector<u8>, blob_id: u256, ctx: &mut TxContext): PrivateData {
+public fun store(nonce: vector<u8>, blob_id: String, ctx: &mut TxContext): PrivateData {
     PrivateData {
         id: object::new(ctx),
         creator: ctx.sender(),

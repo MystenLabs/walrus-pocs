@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fromHex } from "@mysten/sui/utils";
 import { Transaction } from "@mysten/sui/transactions";
-import { getFullnodeUrl, SuiClient } from "@mysten/sui/client";
+import { SuiClient } from "@mysten/sui/client";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { decodeSuiPrivateKey } from "@mysten/sui/cryptography";
-
-const NET = process.env.NEXT_PUBLIC_SUI_NETWORK as 'mainnet' | 'testnet' | 'devnet' | 'localnet' || "testnet";
+import { verifyPersonalMessageSignature } from "@mysten/sui/verify";
+import { 
+    SEAL_CONFIG,
+    createSuiClient,
+} from "@/utils/sealUtils";
 
 // Global error handlers
 if (typeof process !== 'undefined') {
@@ -26,7 +29,7 @@ let signerInstance: Ed25519Keypair | null = null;
 
 function getSuiClient(): SuiClient {
     if (!suiClientInstance) {
-        suiClientInstance = new SuiClient({ url: getFullnodeUrl(NET) });
+        suiClientInstance = createSuiClient();
     }
     return suiClientInstance;
 }
@@ -43,7 +46,7 @@ function getSigner(): Ed25519Keypair {
 
 export async function POST(req: NextRequest) {
     try {
-        const { encryptedObject, nonce, solanaAddress, signature } = await req.json();
+        const { encryptedObject, nonce, suiAddress, signature, personalMessageBase64 } = await req.json();
 
         // Validate required fields
         if (typeof encryptedObject !== "string" || !encryptedObject) {
@@ -60,9 +63,9 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        if (typeof solanaAddress !== "string" || !solanaAddress) {
+        if (typeof suiAddress !== "string" || !suiAddress) {
             return NextResponse.json(
-                { ok: false, error: "Missing solanaAddress" },
+                { ok: false, error: "Missing suiAddress" },
                 { status: 400 }
             );
         }
@@ -74,32 +77,38 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // Validate Solana signature
+        if (typeof personalMessageBase64 !== "string" || !personalMessageBase64) {
+            return NextResponse.json(
+                { ok: false, error: "Missing personalMessageBase64" },
+                { status: 400 }
+            );
+        }
+
+        // Validate Sui signature
         try {
-            // Create the message that should have been signed
-            const message = `Encrypt data with nonce: ${nonce}`;
-            const messageBytes = new TextEncoder().encode(message);
+            // Decode the personal message from base64 (Seal's personal message is binary)
+            const messageBytes = Buffer.from(personalMessageBase64, 'base64');
 
-            const bs58 = await import('bs58');
-            const signatureBytes = bs58.default.decode(signature);
-
-            // Verify signature
-            const nacl = await import('tweetnacl');
-            const publicKeyBytes = bs58.default.decode(solanaAddress);
-
-            console.log('Message:', message);
+            console.log('Personal message (decoded):', new TextDecoder().decode(messageBytes));
             console.log('Message bytes length:', messageBytes.length);
-            console.log('Signature bytes length:', signatureBytes.length);
-            console.log('Public key bytes length:', publicKeyBytes.length);
+            console.log('Signature (base64):', signature);
+            console.log('Sui address:', suiAddress);
 
-            const isValid = nacl.sign.detached.verify(messageBytes, signatureBytes, publicKeyBytes);
-            console.log('Verification result:', isValid);
+            const publicKey = await verifyPersonalMessageSignature(
+                messageBytes,
+                signature
+            );
 
-            if (!isValid) {
-                throw new Error("Invalid signature - verification failed");
+            console.log('✅ Signature verification succeeded');
+            console.log('Public key from signature:', publicKey.toSuiAddress());
+            
+            // Verify the signature matches the claimed address
+            if (publicKey.toSuiAddress() !== suiAddress) {
+                throw new Error("Signature does not match the provided Sui address");
             }
 
         } catch (sigError: any) {
+            console.error('❌ Signature validation error:', sigError);
             return NextResponse.json(
                 { ok: false, error: `Signature validation failed: ${sigError.message}` },
                 { status: 400 }
@@ -150,28 +159,14 @@ export async function POST(req: NextRequest) {
         }
 
         // Generate the key ID for PrivateData pattern: [suiAddress bytes][nonce bytes]
-        // Convert Solana address to Sui address (same logic as frontend)
-        const bs58 = await import('bs58');
-        const { blake2b } = await import('@noble/hashes/blake2.js');
-
-        const ed25519PublicKey = bs58.default.decode(solanaAddress);
-        let suiBytes = new Uint8Array(ed25519PublicKey.length + 1);
-        suiBytes.set([0x0]);
-        suiBytes.set(ed25519PublicKey, 1);
-        const suiAddressBytes = blake2b(suiBytes, { dkLen: 32 });
-
-        // Convert Sui address bytes to hex string with 0x prefix
-        const suiAddress = '0x' + Buffer.from(suiAddressBytes).toString('hex');
-        console.log('Sui address:', suiAddress);
-
-        // Convert nonce from hex string back to bytes
+        const suiAddressBytes = fromHex(suiAddress.replace(/^0x/, ''));
         const nonceBytes = fromHex(nonce);
-
         const keyIdBytes = new Uint8Array([
             ...suiAddressBytes,
             ...nonceBytes
         ]);
         const keyId = Buffer.from(keyIdBytes).toString('hex');
+        
         const blobId: string = walrusData.newlyCreated?.blobObject.blobId || walrusData.alreadyCertified?.blobId;
         const blobObjectId: string | undefined = walrusData.newlyCreated?.blobObject?.id;
 
@@ -191,21 +186,20 @@ export async function POST(req: NextRequest) {
         if (buf.length > 32) {
             throw new Error("Value exceeds 256-bit unsigned integer range");
         }
-        console.log('buffer length ok:');
+        console.log('buffer length ok');
 
         const priv_data = tx.moveCall({
             target: `${process.env.NEXT_PUBLIC_SEAL_POLICY_PACKAGE_ID}::seal_data::store`,
             arguments: [
                 tx.pure.vector('u8', nonceBytes), // nonce as vector<u8>
-                tx.pure.u256(`0x` + Buffer.from(blobId, 'base64').toString('hex')),
+                tx.pure.string(blobId),
             ],
         });
-        console.log('move-call 0 ok.');
+        console.log('move-call 0 ok');
 
         tx.transferObjects([priv_data], suiAddress);
 
-        console.log('move-call 1 ok.');
-        // tx.setGasBudget(500000000);
+        console.log('move-call 1 ok');
         const client = getSuiClient();
         const signer = getSigner();
 
@@ -259,7 +253,6 @@ export async function POST(req: NextRequest) {
             keyId,
             suiAddress,
             txDigest: resp.digest,
-            solanaAddress,
             nonce,
         });
     } catch (err: any) {
