@@ -152,7 +152,15 @@ export default function EncryptPage() {
       <div className="space-y-2">
         {connected ? (
           <div className="text-sm text-gray-600 dark:text-gray-400">
-            Connected: {currentAccount.address}
+            Connected:{" "}
+            <a 
+              href={`https://testnet.suivision.xyz/account/${currentAccount.address}?tab=Assets`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
+            >
+              {currentAccount.address}
+            </a>
           </div>
         ) : (
           <div className="text-sm text-amber-600 dark:text-amber-400">

@@ -100,9 +100,21 @@ export function useSealSession() {
 
     /**
      * Check if current session is valid and ready
+     * Also checks expiration and auto-clears if expired
      */
     const isSessionValid = useCallback((): boolean => {
-        return session !== null && session.isReady;
+        if (!session || !session.isReady) {
+            return false;
+        }
+
+        // Check if SessionKey has expired
+        if (session.sessionKey.isExpired()) {
+            console.log('🕐 Session expired, clearing...');
+            setSession(null);
+            return false;
+        }
+
+        return true;
     }, [session]);
 
     return {
