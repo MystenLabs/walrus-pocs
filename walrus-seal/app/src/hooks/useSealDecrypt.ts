@@ -1,18 +1,25 @@
 "use client";
 
 import { useMemo } from "react";
-import { EncryptedObject, SessionKey } from "@mysten/seal";
+import { SessionKey, SealClient } from "@mysten/seal";
 import { Transaction } from "@mysten/sui/transactions";
 import { fromHex } from "@mysten/sui/utils";
-import { 
-    SEAL_CONFIG,
-    createSuiClient,
-    createSealClient,
-} from "@/utils/sealUtils";
+import { SuiClient, getFullnodeUrl } from "@mysten/sui/client";
+import { SEAL_CONFIG } from "@/utils/sealUtils";
 
 export function useSealDecrypt() {
-    const suiClient = useMemo(() => createSuiClient(), []);
-    const sealClient = useMemo(() => createSealClient(suiClient), [suiClient]);
+    const suiClient = useMemo(() => new SuiClient({ 
+        url: getFullnodeUrl(SEAL_CONFIG.network) 
+    }), []);
+    
+    const sealClient = useMemo(() => new SealClient({
+        suiClient,
+        serverConfigs: SEAL_CONFIG.serverObjectIds.map((id) => ({ 
+            objectId: id, 
+            weight: 1 
+        })),
+        verifyKeyServers: false,
+    }), [suiClient]);
 
     async function decryptData(
         encryptedObjectBase64: string,
@@ -62,7 +69,6 @@ export function useSealDecrypt() {
         const sealId = Buffer.from(keyIdBytes).toString('hex');
 
         // 5. Build PTB that calls seal_approve
-        console.log("privateDataObject.data.objectId: ", privateDataObject.data.objectId);
         const tx = new Transaction();
         tx.moveCall({
             target: `${SEAL_CONFIG.packageId}::seal_data::seal_approve`,
@@ -77,23 +83,7 @@ export function useSealDecrypt() {
             onlyTransactionKind: true 
         });
 
-        // 6. Explicitly fetch keys first (for better error messages)
-        console.log("Fetching decryption keys for keyId:", sealId);
-        try {
-            await sealClient.fetchKeys({
-                ids: [sealId],
-                txBytes,
-                sessionKey,
-                threshold: SEAL_CONFIG.threshold,
-            });
-            console.log("✓ Keys fetched successfully");
-        } catch (fetchError: any) {
-            console.error("❌ Failed to fetch keys:", fetchError);
-            throw new Error(`Failed to fetch decryption keys: ${fetchError.message}`);
-        }
-
-        // 7. Decrypt using Seal
-        console.log("Decrypting with fetched keys...");
+        // 6. Decrypt using Seal
         const decryptedBytes = await sealClient.decrypt({
             data: encryptedBytes,
             sessionKey,

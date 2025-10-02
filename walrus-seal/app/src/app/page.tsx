@@ -36,16 +36,12 @@ export default function EncryptPage() {
       setStatus("Initializing Seal session...");
 
       // Initialize the Seal session with a signing callback
-      console.log('🔐 Initializing Seal session...');
       await initializeSession(currentAccount.address, async (message: Uint8Array) => {
-        console.log('📝 Signing personal message...');
         const { signature } = await signPersonalMessage({
           message,
         });
-        console.log('✍️ Signature (base64):', signature);
         return { signature };
       });
-      console.log('✅ Seal session initialized');
 
       setSessionInitialized(true);
       setStatus(`Seal session initialized ✓`);
@@ -119,10 +115,6 @@ export default function EncryptPage() {
         throw new Error("Seal session expired. Please initialize session first.");
       }
 
-      console.log('🔐 Decrypting directly from Walrus...');
-      console.log('  sessionKey:', session.sessionKey);
-      console.log('  blobId:', blobId.trim());
-
       // 1) Fetch encrypted blob directly from Walrus aggregator
       const walrusAggregator = process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR || "https://aggregator.walrus-testnet.walrus.space";
       const walrusRes = await fetch(`${walrusAggregator}/v1/blobs/${blobId.trim()}`);
@@ -133,8 +125,6 @@ export default function EncryptPage() {
       
       const encryptedBytes = await walrusRes.arrayBuffer();
       const encryptedObjectBase64 = Buffer.from(encryptedBytes).toString('base64');
-      
-      console.log('  Fetched encrypted blob, size:', encryptedBytes.byteLength);
 
       // 2) Decrypt using the hook with the session's SessionKey
       // The decryptData will fetch the PrivateData object by blobId

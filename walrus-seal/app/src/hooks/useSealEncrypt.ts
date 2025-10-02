@@ -2,16 +2,23 @@
 
 import { useMemo } from "react";
 import { toHex, fromHex } from "@mysten/sui/utils";
-import { blake2b } from "@noble/hashes/blake2.js";
-import { 
-    SEAL_CONFIG,
-    createSuiClient,
-    createSealClient,
-} from "@/utils/sealUtils";
+import { SuiClient, getFullnodeUrl } from "@mysten/sui/client";
+import { SealClient } from "@mysten/seal";
+import { SEAL_CONFIG } from "@/utils/sealUtils";
 
 export function useSealEncrypt() {
-    const suiClient = useMemo(() => createSuiClient(), []);
-    const sealClient = useMemo(() => createSealClient(suiClient), [suiClient]);
+    const suiClient = useMemo(() => new SuiClient({ 
+        url: getFullnodeUrl(SEAL_CONFIG.network) 
+    }), []);
+    
+    const sealClient = useMemo(() => new SealClient({
+        suiClient,
+        serverConfigs: SEAL_CONFIG.serverObjectIds.map((id) => ({ 
+            objectId: id, 
+            weight: 1 
+        })),
+        verifyKeyServers: false,
+    }), [suiClient]);
 
     async function encryptUtf8(message: string, suiAddress: string) {
         const data = new TextEncoder().encode(message);

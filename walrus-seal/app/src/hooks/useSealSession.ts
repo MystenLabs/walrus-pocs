@@ -2,10 +2,9 @@
 
 import { useState, useCallback, useMemo } from "react";
 import { SessionKey } from "@mysten/seal";
+import { SuiClient, getFullnodeUrl } from "@mysten/sui/client";
 import { 
     SEAL_CONFIG,
-    createSuiClient,
-    createSessionKey,
     getPersonalMessageAsString,
 } from "@/utils/sealUtils";
 
@@ -19,7 +18,9 @@ export interface SealSessionState {
 
 export function useSealSession() {
     const [session, setSession] = useState<SealSessionState | null>(null);
-    const suiClient = useMemo(() => createSuiClient(), []);
+    const suiClient = useMemo(() => new SuiClient({ 
+        url: getFullnodeUrl(SEAL_CONFIG.network) 
+    }), []);
 
     /**
      * Initialize a Seal session - creates SessionKey with signature callback
@@ -76,7 +77,12 @@ export function useSealSession() {
     const getPersonalMessage = useCallback(async (
         suiAddress: string
     ): Promise<Uint8Array> => {
-        const tempSessionKey = await createSessionKey(suiAddress, suiClient);
+        const tempSessionKey = await SessionKey.create({
+            address: suiAddress,
+            packageId: SEAL_CONFIG.packageId,
+            ttlMin: 30,
+            suiClient,
+        });
         return tempSessionKey.getPersonalMessage();
     }, [suiClient]);
 

@@ -1,25 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fromHex } from "@mysten/sui/utils";
 import { Transaction } from "@mysten/sui/transactions";
-import { SuiClient } from "@mysten/sui/client";
+import { SuiClient, getFullnodeUrl } from "@mysten/sui/client";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { decodeSuiPrivateKey } from "@mysten/sui/cryptography";
 import { verifyPersonalMessageSignature } from "@mysten/sui/verify";
-import { 
-    SEAL_CONFIG,
-    createSuiClient,
-} from "@/utils/sealUtils";
+import { SEAL_CONFIG } from "@/utils/sealUtils";
 
 // Global error handlers
 if (typeof process !== 'undefined') {
     process.on('uncaughtException', (err) => {
-        console.error('💥 UNCAUGHT EXCEPTION:', err);
-        console.error('Stack:', err.stack);
+        console.error('Uncaught exception:', err);
     });
 
-    process.on('unhandledRejection', (reason, promise) => {
-        console.error('💥 UNHANDLED REJECTION at:', promise);
-        console.error('Reason:', reason);
+    process.on('unhandledRejection', (reason) => {
+        console.error('Unhandled rejection:', reason);
     });
 }
 
@@ -29,7 +24,9 @@ let signerInstance: Ed25519Keypair | null = null;
 
 function getSuiClient(): SuiClient {
     if (!suiClientInstance) {
-        suiClientInstance = createSuiClient();
+        suiClientInstance = new SuiClient({ 
+            url: getFullnodeUrl(SEAL_CONFIG.network) 
+        });
     }
     return suiClientInstance;
 }
@@ -89,18 +86,10 @@ export async function POST(req: NextRequest) {
             // Decode the personal message from base64 (Seal's personal message is binary)
             const messageBytes = Buffer.from(personalMessageBase64, 'base64');
 
-            console.log('Personal message (decoded):', new TextDecoder().decode(messageBytes));
-            console.log('Message bytes length:', messageBytes.length);
-            console.log('Signature (base64):', signature);
-            console.log('Sui address:', suiAddress);
-
             const publicKey = await verifyPersonalMessageSignature(
                 messageBytes,
                 signature
             );
-
-            console.log('✅ Signature verification succeeded');
-            console.log('Public key from signature:', publicKey.toSuiAddress());
             
             // Verify the signature matches the claimed address
             if (publicKey.toSuiAddress() !== suiAddress) {
@@ -129,7 +118,6 @@ export async function POST(req: NextRequest) {
         // Store the encrypted blob using Walrus HTTP API
         const walrusPublisher = process.env.WALRUS_PUBLISHER || "https://publisher.walrus-testnet.walrus.space";
 
-        console.log('Storing blob to Walrus...');
         let walrusData;
         try {
             const walrusRes = await fetch(`${walrusPublisher}/v1/blobs`, {
@@ -140,18 +128,14 @@ export async function POST(req: NextRequest) {
                 },
             });
 
-            console.log('Walrus response status:', walrusRes.status);
-
             if (!walrusRes.ok) {
                 const errorText = await walrusRes.text();
-                console.error('Walrus error:', errorText);
-                throw new Error(`Walrus API error: ${walrusRes.status} ${walrusRes.statusText}`);
+                throw new Error(`Walrus API error: ${walrusRes.status} - ${errorText}`);
             }
 
             walrusData = await walrusRes.json();
-            console.log('Walrus data:', walrusData);
         } catch (walrusError: any) {
-            console.error("Walrus API error:", walrusError);
+            console.error("Walrus storage error:", walrusError);
             return NextResponse.json(
                 { ok: false, error: `Failed to store blob: ${walrusError.message}` },
                 { status: 500 }
@@ -186,7 +170,6 @@ export async function POST(req: NextRequest) {
         if (buf.length > 32) {
             throw new Error("Value exceeds 256-bit unsigned integer range");
         }
-        console.log('buffer length ok');
 
         const priv_data = tx.moveCall({
             target: `${process.env.NEXT_PUBLIC_SEAL_POLICY_PACKAGE_ID}::seal_data::store`,
@@ -196,17 +179,13 @@ export async function POST(req: NextRequest) {
                 tx.pure.string(blobId),
             ],
         });
-        console.log('move-call 0 ok');
 
         tx.transferObjects([priv_data], suiAddress);
-
-        console.log('move-call 1 ok');
         const client = getSuiClient();
         const signer = getSigner();
 
         let resp;
         try {
-            console.log('Executing transaction...');
             resp = await client.signAndExecuteTransaction({
                 transaction: tx,
                 signer,
@@ -214,29 +193,10 @@ export async function POST(req: NextRequest) {
                     showEffects: true,
                 }
             });
-
-            console.log('Transaction sent:', resp.digest);
-
         } catch (txErr: any) {
-            console.error('❌ Transaction error caught');
-            console.error('Type:', typeof txErr);
-            console.error('Constructor:', txErr?.constructor?.name);
 
-            // Safely extract error information
             const errorMessage = txErr?.message || String(txErr);
-            const errorCode = txErr?.code;
-            const errorName = txErr?.name;
-
-            console.error('Name:', errorName);
-            console.error('Code:', errorCode);
-            console.error('Message:', errorMessage);
-
-            // Try to stringify safely
-            try {
-                console.error('JSON:', JSON.stringify(txErr, null, 2));
-            } catch {
-                console.error('Could not stringify error');
-            }
+            console.error('Transaction error:', errorMessage);
 
             throw new Error(`Transaction execution failed: ${errorMessage}`);
         }
@@ -257,10 +217,7 @@ export async function POST(req: NextRequest) {
             nonce,
         });
     } catch (err: any) {
-        console.error("❌ TOP LEVEL ERROR:");
-        console.error("Error:", err);
-        console.error("Message:", err?.message);
-        console.error("Stack:", err?.stack);
+        console.error("API error:", err?.message || err);
         return NextResponse.json(
             { ok: false, error: err?.message || "Unknown error" },
             { status: 500 }
