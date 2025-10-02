@@ -1,15 +1,25 @@
 "use client";
 
 import { useMemo } from "react";
-import { toHex, fromHex } from "@mysten/sui/utils";
+import { toHex } from "@mysten/sui/utils";
 import { SuiClient, getFullnodeUrl } from "@mysten/sui/client";
 import { SealClient } from "@mysten/seal";
-import { SEAL_CONFIG } from "@/utils/sealUtils";
+import { SEAL_CONFIG, computeSealKeyId } from "@/utils/sealUtils";
+
+const NONCE_SIZE_BYTES = 16;
+
+export interface EncryptionResult {
+    encryptedObjectBase64: string;
+    keyId: string;
+    suiAddress: string;
+    nonce: string;
+}
 
 export function useSealEncrypt() {
-    const suiClient = useMemo(() => new SuiClient({ 
-        url: getFullnodeUrl(SEAL_CONFIG.network) 
-    }), []);
+    const suiClient = useMemo(
+        () => new SuiClient({ url: getFullnodeUrl(SEAL_CONFIG.network) }), 
+        []
+    );
     
     const sealClient = useMemo(() => new SealClient({
         suiClient,
@@ -20,36 +30,38 @@ export function useSealEncrypt() {
         verifyKeyServers: false,
     }), [suiClient]);
 
-    async function encryptUtf8(message: string, suiAddress: string) {
-        const data = new TextEncoder().encode(message);
+    /**
+     * Encrypt a UTF-8 string message using Seal
+     * 
+     * @param message - Plain text message to encrypt
+     * @param suiAddress - Sui address of the creator (used for key ID)
+     * @returns Encryption result with base64 encrypted data, key ID, and nonce
+     */
+    async function encryptUtf8(message: string, suiAddress: string): Promise<EncryptionResult> {
+        const messageBytes = new TextEncoder().encode(message);
         
-        // Generate random 16-byte nonce
-        const nonce = crypto.getRandomValues(new Uint8Array(16));
+        // Generate a random nonce for this encryption
+        const nonce = crypto.getRandomValues(new Uint8Array(NONCE_SIZE_BYTES));
         
-        // Convert Sui address to bytes for key ID computation
-        const suiAddressBytes = fromHex(suiAddress.replace(/^0x/, ''));
+        // Compute the Seal key ID (address + nonce)
+        const keyId = computeSealKeyId(suiAddress, nonce);
         
-        // Compute key ID: [suiAddressBytes][nonceBytes]
-        const keyIdBytes = new Uint8Array([
-            ...suiAddressBytes,
-            ...nonce
-        ]);
-        const sealId = Buffer.from(keyIdBytes).toString('hex');
-        
+        // Encrypt the message using Seal's threshold encryption
         const { encryptedObject } = await sealClient.encrypt({
-            data,
+            data: messageBytes,
             packageId: SEAL_CONFIG.packageId,
-            id: sealId,
+            id: keyId,
             threshold: SEAL_CONFIG.threshold,
         });
 
-        // return base64 so you can POST JSON easily
-        const b64 = Buffer.from(encryptedObject as unknown as Uint8Array).toString("base64");
+        // Convert encrypted object to base64 for JSON transport
+        const encryptedBase64 = Buffer.from(encryptedObject as unknown as Uint8Array).toString("base64");
+        
         return { 
-            encryptedObjectBase64: b64,
-            keyId: sealId,
+            encryptedObjectBase64: encryptedBase64,
+            keyId,
             suiAddress,
-            nonce: toHex(nonce)
+            nonce: toHex(nonce),
         };
     }
 

@@ -4,13 +4,51 @@ import { useMemo } from "react";
 import { SessionKey, SealClient } from "@mysten/seal";
 import { Transaction } from "@mysten/sui/transactions";
 import { fromHex } from "@mysten/sui/utils";
-import { SuiClient, getFullnodeUrl } from "@mysten/sui/client";
-import { SEAL_CONFIG } from "@/utils/sealUtils";
+import { SuiClient, getFullnodeUrl, SuiObjectResponse } from "@mysten/sui/client";
+import { SEAL_CONFIG, computeSealKeyId } from "@/utils/sealUtils";
+
+interface PrivateDataFields {
+    creator: string;
+    nonce: number[];
+    blob_id: string;
+}
+
+/**
+ * Find a PrivateData object by blob ID among owned objects
+ */
+function findPrivateDataObject(
+    objects: SuiObjectResponse[],
+    targetBlobId: string
+): SuiObjectResponse | undefined {
+    return objects.find((obj) => {
+        const fields = (obj.data?.content as any)?.fields as PrivateDataFields | undefined;
+        return fields?.blob_id === targetBlobId;
+    });
+}
+
+/**
+ * Build a transaction that calls seal_approve for access control
+ */
+function buildApprovalTransaction(
+    keyId: string,
+    privateDataObjectId: string
+): Transaction {
+    const tx = new Transaction();
+    tx.moveCall({
+        target: `${SEAL_CONFIG.packageId}::seal_data::seal_approve`,
+        arguments: [
+            tx.pure.vector("u8", fromHex(keyId)),
+            tx.object(privateDataObjectId),
+        ]
+    });
+    return tx;
+}
 
 export function useSealDecrypt() {
-    const suiClient = useMemo(() => new SuiClient({ 
-        url: getFullnodeUrl(SEAL_CONFIG.network) 
-    }), []);
+    const suiClient = useMemo(
+        () => new SuiClient({ url: getFullnodeUrl(SEAL_CONFIG.network) }), 
+        []
+    );
     
     const sealClient = useMemo(() => new SealClient({
         suiClient,
@@ -21,16 +59,28 @@ export function useSealDecrypt() {
         verifyKeyServers: false,
     }), [suiClient]);
 
+    /**
+     * Decrypt data encrypted with Seal
+     * 
+     * Fetches the PrivateData object from chain, builds an approval transaction,
+     * and decrypts the data using the session key.
+     * 
+     * @param encryptedObjectBase64 - Base64-encoded encrypted object from Walrus
+     * @param suiAddress - Current user's Sui address (must own the PrivateData object)
+     * @param blobId - Walrus blob ID to identify the PrivateData object
+     * @param sessionKey - Active Seal session key
+     * @returns Decrypted message as UTF-8 string
+     */
     async function decryptData(
         encryptedObjectBase64: string,
         suiAddress: string,
         blobId: string,
-        sessionKey: SessionKey  // Use the SessionKey from session directly!
+        sessionKey: SessionKey
     ): Promise<string> {
-        // 1. Parse the encrypted object
+        // Parse encrypted bytes from base64
         const encryptedBytes = Buffer.from(encryptedObjectBase64, "base64");
 
-        // 2. Fetch the PrivateData object on-chain by blobId
+        // Fetch all PrivateData objects owned by this address
         const ownedObjects = await suiClient.getOwnedObjects({
             owner: suiAddress,
             filter: {
@@ -41,56 +91,37 @@ export function useSealDecrypt() {
             }
         });
 
-        // Find the object with matching blob_id (now stored as String)
-        const privateDataObject = ownedObjects.data.find((obj: any) => {
-            if (obj.data?.content?.fields?.blob_id) {
-                const objBlobId = obj.data.content.fields.blob_id;
-                return objBlobId === blobId;
-            }
-            return false;
-        });
+        // Find the specific object matching this blob ID
+        const privateDataObject = findPrivateDataObject(ownedObjects.data, blobId);
 
         if (!privateDataObject?.data?.objectId) {
-            throw new Error(`No PrivateData object found for blob ID ${blobId}`);
+            throw new Error(`No PrivateData object found for blob ID: ${blobId}`);
         }
 
-        // Extract nonce and creator from the object
-        const fields = (privateDataObject.data.content as any).fields;
-        const creator = fields.creator;
+        // Extract metadata from the on-chain object
+        const fields = (privateDataObject.data.content as any).fields as PrivateDataFields;
+        const creatorAddress = fields.creator;
         const nonceBytes = new Uint8Array(fields.nonce);
 
-        // 4. Compute the key ID using the CREATOR's address (not current user)
+        // Compute the key ID using the CREATOR's address (not the current owner)
         // This is critical: the keyId must match what was used during encryption
-        const creatorAddressBytes = fromHex(creator.replace(/^0x/, ''));
-        const keyIdBytes = new Uint8Array([
-            ...creatorAddressBytes,
-            ...nonceBytes
-        ]);
-        const sealId = Buffer.from(keyIdBytes).toString('hex');
+        const keyId = computeSealKeyId(creatorAddress, nonceBytes);
 
-        // 5. Build PTB that calls seal_approve
-        const tx = new Transaction();
-        tx.moveCall({
-            target: `${SEAL_CONFIG.packageId}::seal_data::seal_approve`,
-            arguments: [
-                tx.pure.vector("u8", fromHex(sealId)),
-                tx.object(privateDataObject.data.objectId),
-            ]
-        });
-
-        const txBytes = await tx.build({ 
+        // Build approval transaction to prove ownership
+        const approvalTx = buildApprovalTransaction(keyId, privateDataObject.data.objectId);
+        const txBytes = await approvalTx.build({ 
             client: suiClient, 
             onlyTransactionKind: true 
         });
 
-        // 6. Decrypt using Seal
+        // Decrypt using Seal with approval proof
         const decryptedBytes = await sealClient.decrypt({
             data: encryptedBytes,
             sessionKey,
             txBytes,
         });
 
-        // 7. Convert back to string
+        // Convert decrypted bytes back to UTF-8 string
         return new TextDecoder().decode(decryptedBytes);
     }
 

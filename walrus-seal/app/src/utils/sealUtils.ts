@@ -1,7 +1,8 @@
 import { SessionKey } from "@mysten/seal";
+import { fromHex } from "@mysten/sui/utils";
 
 /**
- * Configuration constants for Seal
+ * Seal configuration - pulled from environment variables
  */
 export const SEAL_CONFIG = {
     network: (process.env.NEXT_PUBLIC_SUI_NETWORK as 'mainnet' | 'testnet' | 'devnet' | 'localnet') || "testnet",
@@ -14,8 +15,23 @@ export const SEAL_CONFIG = {
 };
 
 /**
- * Get personal message from SessionKey as a string
- * Handles both string and Uint8Array return types
+ * Compute Seal key ID from address and nonce
+ * Key ID format: [address bytes][nonce bytes]
+ * 
+ * @param suiAddress - Sui address (with or without 0x prefix)
+ * @param nonce - Random nonce bytes
+ * @returns Key ID as hex string
+ */
+export function computeSealKeyId(suiAddress: string, nonce: Uint8Array): string {
+    const addressBytes = fromHex(suiAddress.replace(/^0x/, ''));
+    const keyIdBytes = new Uint8Array([...addressBytes, ...nonce]);
+    return Buffer.from(keyIdBytes).toString('hex');
+}
+
+/**
+ * Extract personal message from SessionKey as a string
+ * Handles both string and Uint8Array return types from getPersonalMessage()
+ * 
  * @param sessionKey - SessionKey instance
  * @returns Personal message as string
  */

@@ -3,10 +3,10 @@
 import { useState, useCallback, useMemo } from "react";
 import { SessionKey } from "@mysten/seal";
 import { SuiClient, getFullnodeUrl } from "@mysten/sui/client";
-import { 
-    SEAL_CONFIG,
-    getPersonalMessageAsString,
-} from "@/utils/sealUtils";
+import { useCurrentAccount, useSignPersonalMessage } from "@mysten/dapp-kit";
+import { SEAL_CONFIG } from "@/utils/sealUtils";
+
+const SESSION_TTL_MINUTES = 30;
 
 export interface SealSessionState {
     suiAddress: string;
@@ -18,47 +18,50 @@ export interface SealSessionState {
 
 export function useSealSession() {
     const [session, setSession] = useState<SealSessionState | null>(null);
-    const suiClient = useMemo(() => new SuiClient({ 
-        url: getFullnodeUrl(SEAL_CONFIG.network) 
-    }), []);
+    const currentAccount = useCurrentAccount();
+    const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
+    
+    const suiClient = useMemo(
+        () => new SuiClient({ url: getFullnodeUrl(SEAL_CONFIG.network) }), 
+        []
+    );
 
     /**
-     * Initialize a Seal session - creates SessionKey with signature callback
+     * Initialize a Seal session with user signature
+     * 
+     * Creates a SessionKey, prompts user to sign with their Sui wallet, then activates the session.
+     * Requires a connected Sui wallet.
+     * 
+     * @returns Initialized session state
+     * @throws Error if no wallet is connected
      */
-    const initializeSession = useCallback(async (
-        suiAddress: string,
-        signMessageCallback: (message: Uint8Array) => Promise<{ signature: string }>
-    ): Promise<SealSessionState> => {
-        console.log('📍 Creating SessionKey with signing callback...');
-        
-        let personalMessageBytes: Uint8Array;
-        let signatureBase64: string;
-        
-        // Create SessionKey with signing callback (matches reference implementation)
+    const initializeSession = useCallback(async (): Promise<SealSessionState> => {
+        if (!currentAccount?.address) {
+            throw new Error("No Sui wallet connected. Please connect your wallet first.");
+        }
+
+        const suiAddress = currentAccount.address;
+
+        // Create a new SessionKey for this address
         const sessionKey = await SessionKey.create({
             address: suiAddress,
             packageId: SEAL_CONFIG.packageId,
-            ttlMin: 30,
+            ttlMin: SESSION_TTL_MINUTES,
             suiClient,
         });
         
-        // Get the personal message to sign
-        personalMessageBytes = sessionKey.getPersonalMessage();
-        console.log('📝 Personal message from Seal:', new TextDecoder().decode(personalMessageBytes));
-        console.log('📝 Message bytes length:', personalMessageBytes.length);
+        // Get the personal message that needs to be signed
+        const personalMessageBytes = sessionKey.getPersonalMessage();
         
-        // Sign with the provided callback
-        const { signature } = await signMessageCallback(personalMessageBytes);
-        signatureBase64 = signature;
+        // Prompt user to sign with their Sui wallet
+        const { signature: signatureBase64 } = await signPersonalMessage({
+            message: personalMessageBytes,
+        });
         
-        console.log('📍 Setting signature...');
-        console.log('📍 Signature (base64):', signatureBase64);
-        
-        // Set the signature
+        // Activate the session by setting the signature
         await sessionKey.setPersonalMessageSignature(signatureBase64);
         
-        console.log('✅ SessionKey created and signature set');
-        
+        // Create and store session state
         const sessionState: SealSessionState = {
             suiAddress,
             sessionKey,
@@ -69,32 +72,40 @@ export function useSealSession() {
         
         setSession(sessionState);
         return sessionState;
-    }, [suiClient]);
+    }, [currentAccount, suiClient, signPersonalMessage]);
 
     /**
-     * Get personal message to sign
+     * Get a personal message for signing without creating a full session
+     * 
+     * Useful for previewing what the user will sign before initializing the session.
+     * Requires a connected Sui wallet.
+     * 
+     * @returns Personal message bytes that would be signed
+     * @throws Error if no wallet is connected
      */
-    const getPersonalMessage = useCallback(async (
-        suiAddress: string
-    ): Promise<Uint8Array> => {
+    const getPersonalMessage = useCallback(async (): Promise<Uint8Array> => {
+        if (!currentAccount?.address) {
+            throw new Error("No Sui wallet connected. Please connect your wallet first.");
+        }
+
         const tempSessionKey = await SessionKey.create({
-            address: suiAddress,
+            address: currentAccount.address,
             packageId: SEAL_CONFIG.packageId,
-            ttlMin: 30,
+            ttlMin: SESSION_TTL_MINUTES,
             suiClient,
         });
         return tempSessionKey.getPersonalMessage();
-    }, [suiClient]);
+    }, [currentAccount, suiClient]);
 
     /**
-     * Clear the current session
+     * Clear the current session state
      */
     const clearSession = useCallback(() => {
         setSession(null);
     }, []);
 
     /**
-     * Check if session is valid
+     * Check if current session is valid and ready
      */
     const isSessionValid = useCallback((): boolean => {
         return session !== null && session.isReady;

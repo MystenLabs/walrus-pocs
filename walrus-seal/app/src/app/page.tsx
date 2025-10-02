@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useCurrentAccount, useSignPersonalMessage } from "@mysten/dapp-kit";
+import { useCurrentAccount } from "@mysten/dapp-kit";
 import { useSealEncrypt } from "@/hooks/useSealEncrypt";
 import { useSealDecrypt } from "@/hooks/useSealDecrypt";
 import { useSealSession } from "@/hooks/useSealSession";
@@ -9,9 +9,8 @@ import { useSealSession } from "@/hooks/useSealSession";
 export default function EncryptPage() {
   const { encryptUtf8 } = useSealEncrypt();
   const { decryptData } = useSealDecrypt();
-  const { session, getPersonalMessage, initializeSession, clearSession, isSessionValid } = useSealSession();
+  const { session, initializeSession, clearSession, isSessionValid } = useSealSession();
   const currentAccount = useCurrentAccount();
-  const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
   
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -26,22 +25,12 @@ export default function EncryptPage() {
   const [decryptedMessage, setDecryptedMessage] = useState<string>("");
 
   const initSession = async () => {
-    if (!currentAccount?.address) {
-      setStatus("Please connect your Sui wallet first");
-      return;
-    }
-
     try {
       setBusy(true);
       setStatus("Initializing Seal session...");
 
-      // Initialize the Seal session with a signing callback
-      await initializeSession(currentAccount.address, async (message: Uint8Array) => {
-        const { signature } = await signPersonalMessage({
-          message,
-        });
-        return { signature };
-      });
+      // Initialize the Seal session (auto-detects connected wallet and prompts to sign)
+      await initializeSession();
 
       setSessionInitialized(true);
       setStatus(`Seal session initialized ✓`);
