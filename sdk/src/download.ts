@@ -7,7 +7,7 @@ import fs from "fs";
 async function download(blobId: string, outputPath: string) {
     const blobBytes = await getClient().walrus.readBlob({blobId})
     fs.writeFileSync(outputPath, blobBytes)
-    console.log(`${blobId} was downloaded at ${outputPath}`);
+    return `${blobId} was downloaded at ${outputPath}`
 }
 
 const args = process.argv.slice(2)

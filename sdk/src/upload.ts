@@ -9,9 +9,8 @@ async function upload(filePath: string) {
     const keypair = await getFundedKeypair();
 
     const file = new Uint8Array(fs.readFileSync(filePath))
-    // const file = new TextEncoder().encode('Hello from the TS SDK!!!\n');
 
-    const {blobId, blobObject} = await client.walrus.write({
+    const {blobId} = await client.walrus.writeBlob({
         blob: file,
         deletable: true,
         epochs: 3,

@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {getWalrusClient} from "./utils/client";
+import {getClient} from "./utils/client";
 
 async function attributes(blobId: string) {
-    return await getWalrusClient().getBlobMetadata({blobId})
+    return await getClient().walrus.getBlobMetadata({blobId})
 }
 
 const args = process.argv.slice(2)
