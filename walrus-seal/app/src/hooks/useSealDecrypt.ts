@@ -20,14 +20,10 @@ export function useSealDecrypt() {
         blobId: string,
         sessionKey: SessionKey  // Use the SessionKey from session directly!
     ): Promise<string> {
-        // 1. Convert Sui address to bytes
-        const suiAddressBytes = fromHex(suiAddress.replace(/^0x/, ''));
-
-        // 2. Parse the encrypted object
+        // 1. Parse the encrypted object
         const encryptedBytes = Buffer.from(encryptedObjectBase64, "base64");
-        const encryptedObject = EncryptedObject.parse(new Uint8Array(encryptedBytes));
 
-        // 3. Fetch the PrivateData object on-chain by blobId
+        // 2. Fetch the PrivateData object on-chain by blobId
         const ownedObjects = await suiClient.getOwnedObjects({
             owner: suiAddress,
             filter: {
@@ -51,18 +47,22 @@ export function useSealDecrypt() {
             throw new Error(`No PrivateData object found for blob ID ${blobId}`);
         }
 
-        // Extract nonce from the object
+        // Extract nonce and creator from the object
         const fields = (privateDataObject.data.content as any).fields;
+        const creator = fields.creator;
         const nonceBytes = new Uint8Array(fields.nonce);
 
-        // 4. Compute the key ID (same logic as encryption)
+        // 4. Compute the key ID using the CREATOR's address (not current user)
+        // This is critical: the keyId must match what was used during encryption
+        const creatorAddressBytes = fromHex(creator.replace(/^0x/, ''));
         const keyIdBytes = new Uint8Array([
-            ...suiAddressBytes,
+            ...creatorAddressBytes,
             ...nonceBytes
         ]);
         const sealId = Buffer.from(keyIdBytes).toString('hex');
 
         // 5. Build PTB that calls seal_approve
+        console.log("privateDataObject.data.objectId: ", privateDataObject.data.objectId);
         const tx = new Transaction();
         tx.moveCall({
             target: `${SEAL_CONFIG.packageId}::seal_data::seal_approve`,
@@ -77,7 +77,23 @@ export function useSealDecrypt() {
             onlyTransactionKind: true 
         });
 
-        // 6. Decrypt using Seal
+        // 6. Explicitly fetch keys first (for better error messages)
+        console.log("Fetching decryption keys for keyId:", sealId);
+        try {
+            await sealClient.fetchKeys({
+                ids: [sealId],
+                txBytes,
+                sessionKey,
+                threshold: SEAL_CONFIG.threshold,
+            });
+            console.log("✓ Keys fetched successfully");
+        } catch (fetchError: any) {
+            console.error("❌ Failed to fetch keys:", fetchError);
+            throw new Error(`Failed to fetch decryption keys: ${fetchError.message}`);
+        }
+
+        // 7. Decrypt using Seal
+        console.log("Decrypting with fetched keys...");
         const decryptedBytes = await sealClient.decrypt({
             data: encryptedBytes,
             sessionKey,

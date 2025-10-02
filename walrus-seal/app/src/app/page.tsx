@@ -73,7 +73,7 @@ export default function EncryptPage() {
 
       // 1) Encrypt with Sui address (nonce generated inside)
       const { encryptedObjectBase64, keyId, nonce } = await encryptUtf8(message, currentAccount.address);
-      setCipherPreview(encryptedObjectBase64.slice(0, 88) + "…"); // just UI sugar
+      setCipherPreview(encryptedObjectBase64.slice(0, 66) + "…"); // just UI sugar
 
       // 2) Use the session signature (no need to sign again!)
       const signatureBase64 = session.signatureBase64;
@@ -96,7 +96,7 @@ export default function EncryptPage() {
       if (!res.ok) throw new Error(json?.error || "Store failed");
 
       setStatus(
-        `Stored OK!\nKey ID: ${keyId}\nBlob ID: ${json.blobId || "N/A"}\nTx Digest: ${json.txDigest || "N/A"}\nSize: ${json.size ?? "?"} bytes`
+        `Stored OK!\nKey ID: ${keyId.slice(0, 66)}…\nBlob ID: ${json.blobId || "N/A"}\nTx Digest: ${json.txDigest || "N/A"}\nSize: ${json.size ?? "?"} bytes`
       );
     } catch (e: any) {
       setStatus(`Error: ${e?.message || String(e)}`);
@@ -142,7 +142,7 @@ export default function EncryptPage() {
         encryptedObjectBase64,
         currentAccount.address,
         blobId.trim(),
-        session.sessionKey  // Pass the SessionKey directly!
+        session.sessionKey
       );
 
       setDecryptedMessage(decrypted);
@@ -165,7 +165,7 @@ export default function EncryptPage() {
       <div className="space-y-2">
         {connected ? (
           <div className="text-sm text-gray-600 dark:text-gray-400">
-            Connected: {currentAccount.address.slice(0, 8)}...{currentAccount.address.slice(-8)}
+            Connected: {currentAccount.address}
           </div>
         ) : (
           <div className="text-sm text-amber-600 dark:text-amber-400">

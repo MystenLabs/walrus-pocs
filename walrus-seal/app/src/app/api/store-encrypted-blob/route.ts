@@ -191,6 +191,7 @@ export async function POST(req: NextRequest) {
         const priv_data = tx.moveCall({
             target: `${process.env.NEXT_PUBLIC_SEAL_POLICY_PACKAGE_ID}::seal_data::store`,
             arguments: [
+                tx.pure.address(suiAddress),
                 tx.pure.vector('u8', nonceBytes), // nonce as vector<u8>
                 tx.pure.string(blobId),
             ],
