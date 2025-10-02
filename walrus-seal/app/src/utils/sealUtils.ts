@@ -65,6 +65,29 @@ export interface CreateSessionKeyParams {
  * @param params.ttlMinutes - Session time-to-live in minutes
  * @param params.suiClient - Sui client instance
  * @param params.signMessage - Callback to sign the personal message (returns base64 signature)
+ * 
+ * ## Signature Format Requirements
+ * 
+ * **IMPORTANT**: Seal expects signatures in **Sui's personal message format**.
+ * 
+ * ### Using Sui Wallets (Easy ✅)
+ * ```typescript
+ * signMessage: async (message) => {
+ *   const { signature } = await signPersonalMessage({ message });
+ *   return signature; // Sui wallets handle the format automatically
+ * }
+ * ```
+ * 
+ * ### Using Non-Sui Wallets (e.g., Phantom, nacl)
+ * For non-Sui wallets, you must manually construct Sui-compatible signatures:
+ * 1. BCS-encode the message
+ * 2. Prepend Intent Scope bytes `[0x03, 0x00, 0x00]`
+ * 3. Hash with Blake2b
+ * 4. Sign with your key (Ed25519, Secp256k1, Secp256r1, zkLogin, Passkey, etc.)
+ * 5. Format as `[scheme_byte][signature_bytes][pubkey_bytes]`
+ * 
+ * **See complete working example**: `app/src/app/api/test-nacl-session/route.ts`
+ * 
  * @returns Initialized and signed SessionKey
  */
 export async function createAndSignSessionKey(

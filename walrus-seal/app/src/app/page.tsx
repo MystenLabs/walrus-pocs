@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 import { useSealEncrypt } from "@/hooks/useSealEncrypt";
 import { useSealDecrypt } from "@/hooks/useSealDecrypt";
@@ -231,6 +232,20 @@ export default function EncryptPage() {
       ) : null}
 
       <div className="text-sm text-gray-700 dark:text-gray-300 font-medium whitespace-pre-line">{decryptStatus}</div>
+
+      {/* Footer with link to test page */}
+      <div className="pt-8 mt-8 border-t border-gray-300 dark:border-gray-600">
+        <div className="text-center text-xs text-gray-500 dark:text-gray-400">
+          <Link 
+            href="/test-nacl-seal-session"
+            className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium"
+          >
+            🧪 Test nacl-based Seal Session
+          </Link>
+          <span className="mx-2">•</span>
+          <span>Demo for non-Sui wallet integration</span>
+        </div>
+      </div>
     </main>
   );
 }
