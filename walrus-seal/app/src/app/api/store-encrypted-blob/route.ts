@@ -171,8 +171,8 @@ export async function POST(req: NextRequest) {
             throw new Error("Value exceeds 256-bit unsigned integer range");
         }
 
-        const priv_data = tx.moveCall({
-            target: `${process.env.NEXT_PUBLIC_SEAL_POLICY_PACKAGE_ID}::seal_data::store`,
+        tx.moveCall({
+            target: `${process.env.NEXT_PUBLIC_SEAL_POLICY_PACKAGE_ID}::seal_data::store_and_transfer`,
             arguments: [
                 tx.pure.address(suiAddress),
                 tx.pure.vector('u8', nonceBytes), // nonce as vector<u8>
@@ -180,7 +180,6 @@ export async function POST(req: NextRequest) {
             ],
         });
 
-        tx.transferObjects([priv_data], suiAddress);
         const client = getSuiClient();
         const signer = getSigner();
 

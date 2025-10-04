@@ -81,15 +81,18 @@ fun compute_key_id(creator: address, nonce: vector<u8>): vector<u8> {
 }
 
 /// Store an encrypted data that was encrypted using the above key id for creator.
-/// Note: If creator is different to ctx.sender(), sender will not be able to request a key.
-/// Instead, they can hold on to the encryption key when encrypting.
-public fun store(creator: address, nonce: vector<u8>, blob_id: String, ctx: &mut TxContext): PrivateData {
-    PrivateData {
-        id: object::new(ctx),
-        creator,
-        nonce,
-        blob_id,
-    }
+/// We would normally set the creator to ctx.sender() and return `PrivateData`, but we are using
+/// this pattern, so that we do not need to sign the transaction ourselves.
+public fun store_and_transfer(creator: address, nonce: vector<u8>, blob_id: String, ctx: &mut TxContext) {
+    transfer::public_transfer(
+        PrivateData {
+            id: object::new(ctx),
+            creator,
+            nonce,
+            blob_id,
+        },
+        creator
+    );
 }
 
 //////////////////////////////////////////////
