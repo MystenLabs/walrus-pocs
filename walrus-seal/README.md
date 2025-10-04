@@ -76,8 +76,7 @@ Open [http://localhost:3000](http://localhost:3000) with your browser.
 4. **Send to Backend**: POST encrypted blob + metadata to `/api/store-encrypted-blob`
 5. **Backend Operations**:
    - Upload encrypted blob to Walrus via HTTP API
-   - Create `PrivateData` object on-chain with metadata (creator, nonce, blob_id)
-   - Transfer object to user's wallet
+   - Create and transfer `PrivateData` object on-chain with metadata (creator, nonce, blob_id)
 
 **Note**: Encryption is fully client-side - the plaintext never leaves the user's browser.
 
@@ -96,6 +95,7 @@ Open [http://localhost:3000](http://localhost:3000) with your browser.
 The Move contract enforces that:
 - Only the **current owner** of the `PrivateData` object can decrypt
 - Access is transferable by transferring the object
+- Object is created and transferred directly under creator
 - Key ID is computed from **original creator** + nonce (not current owner)
 
 ## 🛠️ Project Structure
