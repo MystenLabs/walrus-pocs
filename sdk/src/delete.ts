@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {getClient, getWalrusClient} from "./utils/client";
+import {getClient} from "./utils/client";
 import {getFundedKeypair} from "./utils/funded-keypair";
 import {blobIdFromInt} from "@mysten/walrus";
 
@@ -33,7 +33,7 @@ async function del(blobId: string) {
         throw new Error(`Unable to find blob object id for blob id: ${blobId}`)
     }
 
-    await getWalrusClient().executeDeleteBlobTransaction({
+    await getClient().walrus.executeDeleteBlobTransaction({
         signer: keypair,
         blobObjectId
     })

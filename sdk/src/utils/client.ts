@@ -10,6 +10,12 @@ export function getClient() {
         network: 'testnet',
     }).$extend(
         WalrusClient.experimental_asClientExtension({
+            uploadRelay: {
+                host: 'https://upload-relay.testnet.walrus.space',
+                sendTip: {
+                    max: 1_000,
+                },
+            },
             storageNodeClientOptions: {
                 timeout: 60_000,
             },
@@ -17,12 +23,3 @@ export function getClient() {
     )
 }
 
-export function getWalrusClient() {
-    return new WalrusClient({
-        network: 'testnet',
-        suiClient: getClient(),
-        storageNodeClientOptions: {
-            timeout: 60_000,
-        },
-    });
-}
