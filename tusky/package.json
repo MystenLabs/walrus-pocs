@@ -1,0 +1,27 @@
+{
+  "name": "http-api",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "create_vault": "ts-node ./src/create_vault.ts",
+    "write": "ts-node ./src/write.ts",
+    "read": "ts-node src/read.ts",
+    "upload": "ts-node ./src/upload.ts",
+    "download": "ts-node ./src/download.ts",
+    "delete": "ts-node ./src/delete.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.11.1",
+  "devDependencies": {
+    "@types/node": "^24.6.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@tusky-io/ts-sdk": "^0.36.1",
+    "dotenv": "^17.2.3"
+  }
+}
